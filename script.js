@@ -4,7 +4,7 @@ import { optimize } from 'https://cdn.jsdelivr.net/npm/svgo@3.0.2/dist/svgo.brow
 const fileInput = document.getElementById('file-input');
 const originalContainer = document.getElementById('original-container');
 const modifiedContainer = document.getElementById('modified-container');
-const simplifyPathButton = document.getElementById('simplify-path');
+
 const simplifyToleranceSlider = document.getElementById('simplify-tolerance');
 const zoomInButton = document.getElementById('zoom-in');
 const zoomOutButton = document.getElementById('zoom-out');
@@ -30,17 +30,11 @@ function displaySvg(svgString, container) {
         svgElement.removeAttribute('width');
         svgElement.removeAttribute('height');
         
-        const h2 = container.querySelector('h2');
         container.innerHTML = '';
-        if (h2) container.appendChild(h2);
-
         container.appendChild(svgElement);
         updateZoom();
     } else {
-        const h2 = container.querySelector('h2');
-        container.innerHTML = '';
-        if (h2) container.appendChild(h2);
-        container.insertAdjacentHTML('beforeend', '<p>Could not render SVG.</p>');
+        container.innerHTML = '<p>Could not render SVG.</p>';
     }
 }
 
@@ -118,7 +112,6 @@ function simplifyModifiedView(tolerance) {
 
     try {
         const result = optimize(originalSvgContent, {
-            // path to the file will be passed to plugins
             path: originalFileName,
             plugins: [
                 {
@@ -129,7 +122,6 @@ function simplifyModifiedView(tolerance) {
                                 floatPrecision: tolerance,
                             },
                             removeViewBox: false,
-                            // The correct way to enable/disable plugins in the preset
                             removeDimensions: true,
                             cleanupIDs: false,
                         },
@@ -238,25 +230,29 @@ function updateStatsView() {
         : 0;
 
     statsContainer.innerHTML = `
-        <table>
-            <tr>
-                <th>Metric</th>
-                <th>Original</th>
-                <th>Modified</th>
-                <th>Change</th>
-            </tr>
-            <tr>
-                <td>Path Count</td>
-                <td>${originalStats.pathCount}</td>
-                <td>${modifiedStats.pathCount}</td>
-                <td>${pathCountChange.toFixed(2)}%</td>
-            </tr>
-            <tr>
-                <td>Path Data Length</td>
-                <td>${originalStats.pathLength}</td>
-                <td>${modifiedStats.pathLength}</td>
-                <td>${pathLengthChange.toFixed(2)}%</td>
-            </tr>
+        <table class="table table-sm table-bordered m-0">
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Original</th>
+                    <th>Modified</th>
+                    <th>Change</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Path Count</td>
+                    <td>${originalStats.pathCount}</td>
+                    <td>${modifiedStats.pathCount}</td>
+                    <td>${pathCountChange.toFixed(2)}%</td>
+                </tr>
+                <tr>
+                    <td>Data Length</td>
+                    <td>${originalStats.pathLength}</td>
+                    <td>${modifiedStats.pathLength}</td>
+                    <td>${pathLengthChange.toFixed(2)}%</td>
+                </tr>
+            </tbody>
         </table>
     `;
 }
@@ -285,14 +281,7 @@ fileInput.addEventListener('change', (event) => {
     reader.readAsText(file);
 });
 
-simplifyPathButton.addEventListener('click', () => {
-    if (!originalSvgContent) {
-        alert('Please load an SVG or Vector Drawable first.');
-        return;
-    }
-    const tolerance = parseFloat(simplifyToleranceSlider.value);
-    simplifyModifiedView(tolerance);
-});
+
 
 simplifyToleranceSlider.addEventListener('input', () => {
     if (!originalSvgContent) return; // Don't simplify if nothing is loaded

@@ -4,34 +4,50 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vector Editor</title>
+    <!-- Material Style CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@materialstyle/materialstyle@3.1.1/dist/css/materialstyle.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Vector Editor</h1>
-    <div id="controls">
-        <input type="file" id="file-input" accept=".svg, .xml">
-    </div>
-    <div id="tool-menu">
-        <button id="simplify-path">Simplify Path</button>
-        <button id="save-button">Save Modified</button>
-        <label for="simplify-tolerance">Tolerance:</label>
-        <input type="range" id="simplify-tolerance" min="1" max="8" step="1" value="2">
-    </div>
-    <div id="zoom-controls">
-        <button id="zoom-in">Zoom In</button>
-        <button id="zoom-out">Zoom Out</button>
-        <button id="zoom-reset">Reset Zoom</button>
-    </div>
-    <div id="stats-container"></div>
-    <div id="preview-area">
-        <div id="original-container" class="image-container">
-            <h2>Original</h2>
+    <header id="main-header">
+        <h3>Vector Editor</h3>
+        <div id="controls">
+            <input type="file" id="file-input" accept=".svg, .xml" class="d-none">
+            <label for="file-input" class="btn btn-sm btn-primary">Load Vector</label>
+            <button id="save-button" class="btn btn-sm btn-success">Save Modified</button>
+            <div id="slider-container">
+                <label for="simplify-tolerance">Tolerance</label>
+                <input type="range" id="simplify-tolerance" class="form-range" min="1" max="8" step="1" value="2">
+            </div>
         </div>
-        <div id="modified-container" class="image-container">
-            <h2>Modified</h2>
-        </div>
-    </div>
+    </header>
 
+    <main id="main-content">
+        <div id="stats-container"></div>
+
+        <div id="preview-area">
+            <div class="preview-panel">
+                <div class="preview-header">
+                    <h5>Original</h5>
+                    <div class="zoom-controls">
+                        <button id="zoom-in" class="btn btn-sm btn-secondary">+</button>
+                        <button id="zoom-out" class="btn btn-sm btn-secondary">-</button>
+                        <button id="zoom-reset" class="btn btn-sm btn-secondary">Reset</button>
+                    </div>
+                </div>
+                <div id="original-container" class="image-container"></div>
+            </div>
+            <div class="preview-panel">
+                <div class="preview-header">
+                    <h5>Modified</h5>
+                </div>
+                <div id="modified-container" class="image-container"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@materialstyle/materialstyle@3.1.1/dist/js/materialstyle.min.js"></script>
     <script type="module" src="script.js"></script>
 </body>
 </html>
