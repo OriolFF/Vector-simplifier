@@ -1,23 +1,37 @@
 const fileInput = document.getElementById('file-input');
-const imageContainer = document.getElementById('image-container');
+const originalContainer = document.getElementById('original-container');
+const modifiedContainer = document.getElementById('modified-container');
+let originalSvgContent = '';
 let currentScale = 1;
 
-function displaySvg(svgString) {
+function displaySvg(svgString, container) {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
     const svgElement = svgDoc.querySelector('svg');
 
     if (svgElement) {
-        // Remove fixed dimensions to allow proper scaling and prevent cropping
         svgElement.removeAttribute('width');
         svgElement.removeAttribute('height');
         
-        imageContainer.innerHTML = ''; // Clear previous content
-        imageContainer.appendChild(svgElement);
-        resetZoom(); // Reset zoom for the new image
+        // Clear previous content, but keep the h2
+        const h2 = container.querySelector('h2');
+        container.innerHTML = '';
+        if (h2) container.appendChild(h2);
+
+        container.appendChild(svgElement);
     } else {
-        imageContainer.innerHTML = '<p>Could not render SVG.</p>';
+        const h2 = container.querySelector('h2');
+        container.innerHTML = '';
+        if (h2) container.appendChild(h2);
+        container.insertAdjacentHTML('beforeend', '<p>Could not render SVG.</p>');
     }
+}
+
+function loadAndDisplay(svgString) {
+    originalSvgContent = svgString;
+    displaySvg(originalSvgContent, originalContainer);
+    displaySvg(originalSvgContent, modifiedContainer);
+    resetZoom();
 }
 
 fileInput.addEventListener('change', (event) => {
@@ -32,12 +46,12 @@ fileInput.addEventListener('change', (event) => {
         // For now, we'll just directly inject the SVG content.
         // We will add more sophisticated parsing for Android XML later.
         if (file.type === 'image/svg+xml' || file.name.endsWith('.svg')) {
-            displaySvg(content);
+            loadAndDisplay(content);
         } else if (file.name.endsWith('.xml')) {
-            // Placeholder for Android Vector Drawable handling
             handleAndroidVector(content);
         } else {
-            imageContainer.innerHTML = '<p>Unsupported file type.</p>';
+            originalContainer.innerHTML = '<h2>Original</h2><p>Unsupported file type.</p>';
+            modifiedContainer.innerHTML = '<h2>Modified</h2><p>Unsupported file type.</p>';
         }
     };
     reader.readAsText(file);
@@ -87,10 +101,11 @@ function handleAndroidVector(xmlString) {
         svgContent += processNode(vectorNode);
         svgContent += '</svg>';
 
-        displaySvg(svgContent);
+        loadAndDisplay(svgContent);
     } catch (error) {
         console.error('Error converting Android Vector Drawable:', error);
-        imageContainer.innerHTML = `<p>Could not convert the Android Vector Drawable file. ${error.message}</p>`;
+        originalContainer.innerHTML = `<h2>Original</h2><p>Could not convert the file. ${error.message}</p>`;
+        modifiedContainer.innerHTML = `<h2>Modified</h2><p>Could not convert the file. ${error.message}</p>`;
     }
 }
 
@@ -109,33 +124,24 @@ const zoomOutButton = document.getElementById('zoom-out');
 const zoomResetButton = document.getElementById('zoom-reset');
 
 simplifyPathButton.addEventListener('click', () => {
-    const svgElement = imageContainer.querySelector('svg');
-    if (!svgElement) {
+    if (!originalSvgContent) {
         alert('Please load an SVG or Vector Drawable first.');
         return;
     }
 
-    // Create a hidden canvas for Paper.js to work with
     const canvas = document.createElement('canvas');
     paper.setup(canvas);
 
-    // Import the SVG into the Paper.js project
-    paper.project.importSVG(svgElement, {
+    paper.project.importSVG(originalSvgContent, {
         onLoad: (item) => {
-            // Iterate over all paths in the imported SVG
             const paths = item.getItems({ class: paper.Path, recursive: true });
             paths.forEach(path => {
-                // Simplify each path. A lower tolerance means less simplification.
                 path.simplify(2.5);
             });
 
-            // Export the project back to an SVG string
             const simplifiedSvgString = paper.project.exportSVG({ asString: true });
+            displaySvg(simplifiedSvgString, modifiedContainer);
 
-            // Update the image container with the simplified SVG
-            displaySvg(simplifiedSvgString);
-
-            // Clean up the paper scope
             paper.project.clear();
         },
         expandShapes: true
@@ -143,10 +149,10 @@ simplifyPathButton.addEventListener('click', () => {
 });
 
 function updateZoom() {
-    const svgElement = imageContainer.querySelector('svg');
-    if (svgElement) {
-        svgElement.style.transform = `scale(${currentScale})`;
-    }
+    const svgElements = document.querySelectorAll('.image-container svg');
+    svgElements.forEach(svg => {
+        svg.style.transform = `scale(${currentScale})`;
+    });
 }
 
 function resetZoom() {
