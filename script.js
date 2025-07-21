@@ -78,6 +78,11 @@ function loadAndDisplay(svgString) {
     displaySvg(originalSvgContent, originalContainer);
     displaySvg(modifiedSvgContent, modifiedContainer);
     currentScale = 1; // Reset scale for new image
+    
+    // Apply the current tolerance value immediately
+    const tolerance = parseFloat(simplifyToleranceSlider.value);
+    simplifyModifiedView(tolerance);
+    
     updateStatsView();
 }
 
