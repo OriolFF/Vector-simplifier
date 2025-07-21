@@ -118,15 +118,19 @@ function simplifyModifiedView(tolerance) {
                     name: 'preset-default',
                     params: {
                         overrides: {
+                            // Correctly disable a default plugin
+                            cleanupIds: false,
+                            // Keep viewBox for proper scaling
+                            removeViewBox: false,
+                            // Configure path precision
                             convertPathData: {
                                 floatPrecision: tolerance,
                             },
-                            removeViewBox: false,
-                            removeDimensions: true,
-                            cleanupIDs: false,
                         },
                     },
                 },
+                // Add a non-default plugin
+                'removeDimensions',
             ],
         });
 
