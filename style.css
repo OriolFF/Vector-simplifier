@@ -118,34 +118,35 @@ html, body {
 
 .image-container {
     flex-grow: 1;
-    overflow: auto;
+    overflow: hidden; /* Hide parts of the SVG that go outside the container */
     display: flex;
     justify-content: center;
     align-items: center;
-    cursor: grab; /* Indicate pannable area */
-    position: relative; /* For proper positioning of transformed SVGs */
-    background-color: #f5f5f5; /* Light background to see SVG boundaries */
+    cursor: grab;
+    position: relative;
+    background-color: #f5f5f5;
 }
 
 .image-container.grabbing {
     cursor: grabbing;
 }
 
-/* SVG wrapper for zooming */
+/* The wrapper is now the transformed element */
 .svg-wrapper {
-    min-width: 100%;
-    min-height: 100%;
+    width: 100%;
+    height: 100%;
     display: flex;
-    justify-content: center;
     align-items: center;
-    transition: transform 0.2s ease-in-out;
+    justify-content: center;
+    transform-origin: center; /* Zoom from the center */
+    transition: transform 0.1s linear; /* Smooth transitions for transforms */
 }
 
+/* The SVG fits inside the wrapper */
 .image-container svg {
     max-width: 100%;
     max-height: 100%;
-    transition: transform 0.2s ease-in-out; /* Only transition the transform property */
-    will-change: transform; /* Optimize for transform changes */
+    display: block;
 }
 
 /* --- Statistics Box --- */

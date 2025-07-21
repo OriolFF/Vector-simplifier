@@ -26,22 +26,18 @@ const cancelSaveBtn = document.getElementById('cancelSaveBtn');
 let statsVisible = true;
 
 // --- State Variables ---
-let currentScale = 1;
 let originalSvgContent = null;
 let modifiedSvgContent = null;
 let originalFileType = ''; // 'svg' or 'xml'
 let originalFileName = '';
 let originalViewBox = null; // [x, y, width, height]
-let initialWidth = null;
-let initialHeight = null;
 let backgroundColor = '#ffffff'; // Default background color
 
-// --- Panning State ---
+// --- Viewport State ---
+let originalState = { scale: 1, translateX: 0, translateY: 0 };
+let modifiedState = { scale: 1, translateX: 0, translateY: 0 };
 let isPanning = false;
-let startX;
-let startY;
-let scrollLeft;
-let scrollTop;
+let panStartX, panStartY;
 
 // --- Core Functions ---
 
@@ -52,7 +48,7 @@ function applyBackgroundColor(color) {
     backgroundColor = color;
 }
 
-function displaySvg(svgString, container, preserveZoom = false) {
+function displaySvg(svgString, container, state) {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
     const svgElement = svgDoc.querySelector('svg');
@@ -70,41 +66,42 @@ function displaySvg(svgString, container, preserveZoom = false) {
         }
     }
 
-    // Remove width and height attributes for responsive scaling
+    // Remove width/height for responsive scaling
     svgElement.removeAttribute('width');
     svgElement.removeAttribute('height');
 
-    // Set max-width and max-height to 100% for responsive scaling
-    svgElement.style.maxWidth = '100%';
-    svgElement.style.maxHeight = '100%';
-
-    // Create a wrapper div for the SVG to apply zoom
+    // Prepare the wrapper for transformations
+    container.innerHTML = ''; // Clear previous content
     const wrapper = document.createElement('div');
     wrapper.className = 'svg-wrapper';
-    wrapper.style.transformOrigin = 'top left';
+    wrapper.appendChild(svgElement);
+    container.appendChild(wrapper);
 
-    // If we're preserving zoom, update the SVG in the existing wrapper
-    if (preserveZoom && container.querySelector('.svg-wrapper')) {
-        const wrapper = container.querySelector('.svg-wrapper');
-        const oldSvg = wrapper.querySelector('svg');
-        wrapper.replaceChild(svgElement, oldSvg);
-    } else {
-        // Otherwise, create a new wrapper and add the SVG to it
-        container.innerHTML = '';
-        wrapper.appendChild(svgElement);
-        container.appendChild(wrapper);
-    }
+    // Apply initial state
+    applyTransform(container, state);
     
     // Apply the current background color
     container.style.backgroundColor = backgroundColor;
 }
 
+function applyTransform(container, state) {
+    const wrapper = container.querySelector('.svg-wrapper');
+    if (wrapper) {
+        wrapper.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
+    }
+}
+
 function loadAndDisplay(svgString) {
     originalSvgContent = svgString;
     modifiedSvgContent = svgString; // Initially, modified is same as original
-    displaySvg(originalSvgContent, originalContainer);
-    displaySvg(modifiedSvgContent, modifiedContainer);
-    currentScale = 1; // Reset scale for new image
+    
+    // Reset state for new image
+    originalState = { scale: 1, translateX: 0, translateY: 0 };
+    modifiedState = { scale: 1, translateX: 0, translateY: 0 };
+    originalViewBox = null;
+
+    displaySvg(originalSvgContent, originalContainer, originalState);
+    displaySvg(modifiedSvgContent, modifiedContainer, modifiedState);
     
     // Apply the current tolerance value immediately
     const sliderValue = parseFloat(simplifyToleranceSlider.value);
@@ -188,27 +185,22 @@ function simplifyModifiedView(tolerance) {
                     name: 'preset-default',
                     params: {
                         overrides: {
-                            // Correctly disable a default plugin
                             cleanupIds: false,
-                            // Keep viewBox for proper scaling
                             removeViewBox: false,
-                            // Configure path precision
                             convertPathData: {
                                 floatPrecision: tolerance,
                             },
                         },
                     },
                 },
-                // Add a non-default plugin
                 'removeDimensions',
             ],
         });
 
         modifiedSvgContent = result.data;
         
-        // Use preserveZoom=true to maintain the current zoom level
-        // This prevents the jarring zoom reset when adjusting tolerance
-        displaySvg(modifiedSvgContent, modifiedContainer, currentScale > 1);
+        // Re-display the modified SVG, preserving its current transform state
+        displaySvg(modifiedSvgContent, modifiedContainer, modifiedState);
         updateStatsView();
     } catch (error) {
         console.error('Error during SVGO simplification:', error);
@@ -257,64 +249,103 @@ function downloadFile(content, fileName, mimeType) {
     document.body.removeChild(link);
 }
 
-function applyZoomState(scale) {
-    // Ensure scale is not less than 0.1
-    scale = Math.max(0.1, scale);
-    currentScale = scale;
+// --- New Zoom and Pan Logic ---
+
+function handleZoom(event) {
+    event.preventDefault();
+
+    const container = event.currentTarget;
+    const state = (container === originalContainer) ? originalState : modifiedState;
     
-    // Apply zoom to both containers
-    applyZoomToContainer(originalContainer, scale);
-    applyZoomToContainer(modifiedContainer, scale);
-    
-    // Synchronize scroll positions between containers
-    syncScrollPositions();
+    const rect = container.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    const zoomFactor = 1.1;
+    const scaleChange = (event.deltaY < 0) ? zoomFactor : 1 / zoomFactor;
+    const newScale = Math.max(0.1, state.scale * scaleChange);
+
+    // Adjust translation to zoom towards the mouse pointer
+    state.translateX = mouseX - (mouseX - state.translateX) * scaleChange;
+    state.translateY = mouseY - (mouseY - state.translateY) * scaleChange;
+    state.scale = newScale;
+
+    // Sync the other panel
+    if (container === originalContainer) {
+        modifiedState.scale = originalState.scale;
+        modifiedState.translateX = originalState.translateX;
+        modifiedState.translateY = originalState.translateY;
+        applyTransform(modifiedContainer, modifiedState);
+    } else {
+        originalState.scale = modifiedState.scale;
+        originalState.translateX = modifiedState.translateX;
+        originalState.translateY = modifiedState.translateY;
+        applyTransform(originalContainer, originalState);
+    }
+
+    applyTransform(container, state);
 }
 
-function applyZoomToContainer(container, scale) {
-    const svg = container.querySelector('svg');
-    if (!svg) return;
-    
-    // Create or get a wrapper div for the SVG
-    let wrapper = container.querySelector('.svg-wrapper');
-    if (!wrapper) {
-        // First-time setup
-        wrapper = document.createElement('div');
-        wrapper.className = 'svg-wrapper';
-        
-        // Move SVG into wrapper
-        container.innerHTML = '';
-        container.appendChild(wrapper);
-        wrapper.appendChild(svg);
-    }
-    
-    // Set wrapper styles
-    wrapper.style.transformOrigin = 'top left';
-    wrapper.style.transform = `scale(${scale})`;
-    
-    // Ensure SVG has proper dimensions
-    if (initialWidth === null || initialHeight === null) {
-        if (originalViewBox) {
-            initialWidth = originalViewBox[2];
-            initialHeight = originalViewBox[3];
-        } else {
-            const rect = svg.getBoundingClientRect();
-            initialWidth = rect.width;
-            initialHeight = rect.height;
-        }
-    }
-    
-    // Set SVG to its natural size
-    svg.style.width = 'auto';
-    svg.style.height = 'auto';
-    svg.style.maxWidth = 'none';
-    svg.style.maxHeight = 'none';
-    
-    // Adjust container overflow based on zoom level
-    if (scale > 1) {
-        container.style.overflow = 'auto';
+function startPan(event) {
+    if (event.button !== 0) return; // Only pan with left mouse button
+    isPanning = true;
+    panStartX = event.clientX;
+    panStartY = event.clientY;
+    originalContainer.classList.add('grabbing');
+    modifiedContainer.classList.add('grabbing');
+}
+
+function handlePan(event) {
+    if (!isPanning) return;
+    const dx = event.clientX - panStartX;
+    const dy = event.clientY - panStartY;
+
+    originalState.translateX += dx;
+    originalState.translateY += dy;
+    modifiedState.translateX += dx;
+    modifiedState.translateY += dy;
+
+    applyTransform(originalContainer, originalState);
+    applyTransform(modifiedContainer, modifiedState);
+
+    panStartX = event.clientX;
+    panStartY = event.clientY;
+}
+
+function stopPan() {
+    isPanning = false;
+    originalContainer.classList.remove('grabbing');
+    modifiedContainer.classList.remove('grabbing');
+}
+
+function resetZoomAndPan() {
+    originalState = { scale: 1, translateX: 0, translateY: 0 };
+    modifiedState = { scale: 1, translateX: 0, translateY: 0 };
+    applyTransform(originalContainer, originalState);
+    applyTransform(modifiedContainer, modifiedState);
+}
+
+function zoomAtCenter(container, scaleChange) {
+    const state = (container === originalContainer) ? originalState : modifiedState;
+    const rect = container.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const newScale = Math.max(0.1, state.scale * scaleChange);
+    state.translateX = centerX - (centerX - state.translateX) * scaleChange;
+    state.translateY = centerY - (centerY - state.translateY) * scaleChange;
+    state.scale = newScale;
+    if (container === originalContainer) {
+        modifiedState.scale = originalState.scale;
+        modifiedState.translateX = originalState.translateX;
+        modifiedState.translateY = originalState.translateY;
+        applyTransform(modifiedContainer, modifiedState);
     } else {
-        container.style.overflow = 'hidden';
+        originalState.scale = modifiedState.scale;
+        originalState.translateX = modifiedState.translateX;
+        originalState.translateY = modifiedState.translateY;
+        applyTransform(originalContainer, originalState);
     }
+    applyTransform(container, state);
 }
 
 function calculateSvgStats(svgString) {
@@ -526,105 +557,30 @@ confirmSaveButton.addEventListener('click', () => {
     hideCustomModal();
 });
 
+// --- Event Listeners for Zoom and Pan ---
+
+// Use wheel event for zooming
+originalContainer.addEventListener('wheel', handleZoom);
+modifiedContainer.addEventListener('wheel', handleZoom);
+
+// Use button clicks for zoom in/out/reset
 zoomInButton.addEventListener('click', () => {
-    currentScale *= 1.2;
-    applyZoomState(currentScale);
+    zoomAtCenter(originalContainer, 1.2);
 });
 
 zoomOutButton.addEventListener('click', () => {
-    currentScale /= 1.2;
-    applyZoomState(currentScale);
+    zoomAtCenter(originalContainer, 1 / 1.2);
 });
 
-zoomResetButton.addEventListener('click', () => {
-    currentScale = 1;
-    applyZoomState(currentScale);
-});
+zoomResetButton.addEventListener('click', resetZoomAndPan);
 
-// --- Synchronized Panning Logic ---
+// Panning listeners
+originalContainer.addEventListener('mousedown', startPan);
+modifiedContainer.addEventListener('mousedown', startPan);
 
-const startPanning = (e, container) => {
-    // Only start panning on left mouse button (button 0)
-    if (e.button !== 0) return;
-    
-    isPanning = true;
-    originalContainer.classList.add('grabbing');
-    modifiedContainer.classList.add('grabbing');
-
-    // Store the initial mouse position and the container's scroll position
-    startX = e.pageX;
-    startY = e.pageY;
-    
-    // Store scroll positions for both containers to keep them in sync
-    scrollLeft = container.scrollLeft;
-    scrollTop = container.scrollTop;
-    
-    // Prevent default behavior to avoid text selection during panning
-    e.preventDefault();
-};
-
-const stopPanning = () => {
-    isPanning = false;
-    originalContainer.classList.remove('grabbing');
-    modifiedContainer.classList.remove('grabbing');
-};
-
-const handlePanning = (e) => {
-    if (!isPanning) return;
-    e.preventDefault();
-    
-    // Calculate the distance the mouse has moved from the initial click
-    const walkX = e.pageX - startX;
-    const walkY = e.pageY - startY;
-
-    // Apply the new scroll positions to both containers
-    // Only apply scrolling when zoomed in (currentScale > 1)
-    if (currentScale > 1) {
-        originalContainer.scrollLeft = scrollLeft - walkX;
-        modifiedContainer.scrollLeft = scrollLeft - walkX;
-        originalContainer.scrollTop = scrollTop - walkY;
-        modifiedContainer.scrollTop = scrollTop - walkY;
-    }
-};
-
-// Function to synchronize scroll positions between containers
-function syncScrollPositions() {
-    // Use the active container as the source of truth
-    const sourceContainer = isPanning ? 
-        (startX && startY ? (document.activeElement === originalContainer ? originalContainer : modifiedContainer) : originalContainer) : 
-        originalContainer;
-    
-    // Apply the scroll positions to both containers
-    const scrollLeft = sourceContainer.scrollLeft;
-    const scrollTop = sourceContainer.scrollTop;
-    
-    originalContainer.scrollLeft = scrollLeft;
-    modifiedContainer.scrollLeft = scrollLeft;
-    originalContainer.scrollTop = scrollTop;
-    modifiedContainer.scrollTop = scrollTop;
-}
-
-originalContainer.addEventListener('mousedown', (e) => startPanning(e, originalContainer));
-modifiedContainer.addEventListener('mousedown', (e) => startPanning(e, modifiedContainer));
-
-document.addEventListener('mouseup', stopPanning);
-document.addEventListener('mousemove', handlePanning);
-document.addEventListener('mouseleave', stopPanning); // Stop panning if mouse leaves the document
-
-// Add scroll event listeners to keep containers in sync
-originalContainer.addEventListener('scroll', () => {
-    if (!isPanning) { // Only sync if not currently panning (to avoid loops)
-        modifiedContainer.scrollLeft = originalContainer.scrollLeft;
-        modifiedContainer.scrollTop = originalContainer.scrollTop;
-    }
-});
-
-modifiedContainer.addEventListener('scroll', () => {
-    if (!isPanning) { // Only sync if not currently panning (to avoid loops)
-        originalContainer.scrollLeft = modifiedContainer.scrollLeft;
-        originalContainer.scrollTop = modifiedContainer.scrollTop;
-    }
-});
+document.addEventListener('mousemove', handlePan);
+document.addEventListener('mouseup', stopPan);
+document.addEventListener('mouseleave', stopPan); // Stop pan if mouse leaves window
 
 // Toggle stats visibility
 toggleStatsButton.addEventListener('click', () => {
