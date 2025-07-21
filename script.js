@@ -18,21 +18,55 @@ let originalSvgContent = null;
 let modifiedSvgContent = null;
 let originalFileType = ''; // 'svg' or 'xml'
 let originalFileName = '';
+let originalViewBox = null; // [x, y, width, height]
+let initialWidth = null;
+let initialHeight = null;
+
+// --- Panning State ---
+let isPanning = false;
+let startX;
+let startY;
+let scrollLeft;
+let scrollTop;
 
 // --- Core Functions ---
 
-function displaySvg(svgString, container) {
+function displaySvg(svgString, container, preserveZoom = false) {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
     const svgElement = svgDoc.querySelector('svg');
 
     if (svgElement) {
+        // Remove width/height to allow responsive sizing
         svgElement.removeAttribute('width');
         svgElement.removeAttribute('height');
         
-        container.innerHTML = '';
-        container.appendChild(svgElement);
-        updateZoom();
+        // Check if we need to preserve zoom (for tolerance slider adjustments)
+        if (preserveZoom && container.querySelector('.svg-wrapper')) {
+            // Just update the SVG content inside the existing wrapper
+            const wrapper = container.querySelector('.svg-wrapper');
+            const oldSvg = wrapper.querySelector('svg');
+            if (oldSvg) {
+                wrapper.replaceChild(svgElement, oldSvg);
+            } else {
+                wrapper.appendChild(svgElement);
+            }
+        } else {
+            // Clear container and add the SVG
+            container.innerHTML = '';
+            container.appendChild(svgElement);
+
+            // If this is the original container, store the viewBox and reset zoom state
+            if (container === originalContainer) {
+                const viewBox = svgElement.getAttribute('viewBox');
+                originalViewBox = viewBox ? viewBox.split(' ').map(Number) : null;
+                
+                // Reset dimensions for the new image
+                initialWidth = null;
+                initialHeight = null;
+                currentScale = 1; // Reset scale for new image
+            }
+        }
     } else {
         container.innerHTML = '<p>Could not render SVG.</p>';
     }
@@ -43,7 +77,7 @@ function loadAndDisplay(svgString) {
     modifiedSvgContent = svgString; // Initially, modified is same as original
     displaySvg(originalSvgContent, originalContainer);
     displaySvg(modifiedSvgContent, modifiedContainer);
-    resetZoom();
+    currentScale = 1; // Reset scale for new image
     updateStatsView();
 }
 
@@ -135,7 +169,10 @@ function simplifyModifiedView(tolerance) {
         });
 
         modifiedSvgContent = result.data;
-        displaySvg(modifiedSvgContent, modifiedContainer);
+        
+        // Use preserveZoom=true to maintain the current zoom level
+        // This prevents the jarring zoom reset when adjusting tolerance
+        displaySvg(modifiedSvgContent, modifiedContainer, currentScale > 1);
         updateStatsView();
     } catch (error) {
         console.error('Error during SVGO simplification:', error);
@@ -184,16 +221,64 @@ function downloadFile(content, fileName, mimeType) {
     document.body.removeChild(link);
 }
 
-function updateZoom() {
-    const svgElements = document.querySelectorAll('.image-container svg');
-    svgElements.forEach(svg => {
-        svg.style.transform = `scale(${currentScale})`;
-    });
+function applyZoomState(scale) {
+    // Ensure scale is not less than 0.1
+    scale = Math.max(0.1, scale);
+    currentScale = scale;
+    
+    // Apply zoom to both containers
+    applyZoomToContainer(originalContainer, scale);
+    applyZoomToContainer(modifiedContainer, scale);
+    
+    // Synchronize scroll positions between containers
+    syncScrollPositions();
 }
 
-function resetZoom() {
-    currentScale = 1;
-    updateZoom();
+function applyZoomToContainer(container, scale) {
+    const svg = container.querySelector('svg');
+    if (!svg) return;
+    
+    // Create or get a wrapper div for the SVG
+    let wrapper = container.querySelector('.svg-wrapper');
+    if (!wrapper) {
+        // First-time setup
+        wrapper = document.createElement('div');
+        wrapper.className = 'svg-wrapper';
+        
+        // Move SVG into wrapper
+        container.innerHTML = '';
+        container.appendChild(wrapper);
+        wrapper.appendChild(svg);
+    }
+    
+    // Set wrapper styles
+    wrapper.style.transformOrigin = 'top left';
+    wrapper.style.transform = `scale(${scale})`;
+    
+    // Ensure SVG has proper dimensions
+    if (initialWidth === null || initialHeight === null) {
+        if (originalViewBox) {
+            initialWidth = originalViewBox[2];
+            initialHeight = originalViewBox[3];
+        } else {
+            const rect = svg.getBoundingClientRect();
+            initialWidth = rect.width;
+            initialHeight = rect.height;
+        }
+    }
+    
+    // Set SVG to its natural size
+    svg.style.width = 'auto';
+    svg.style.height = 'auto';
+    svg.style.maxWidth = 'none';
+    svg.style.maxHeight = 'none';
+    
+    // Adjust container overflow based on zoom level
+    if (scale > 1) {
+        container.style.overflow = 'auto';
+    } else {
+        container.style.overflow = 'hidden';
+    }
 }
 
 function calculateSvgStats(svgString) {
@@ -324,14 +409,100 @@ saveButton.addEventListener('click', () => {
 
 zoomInButton.addEventListener('click', () => {
     currentScale *= 1.2;
-    updateZoom();
+    applyZoomState(currentScale);
 });
 
 zoomOutButton.addEventListener('click', () => {
     currentScale /= 1.2;
-    updateZoom();
+    applyZoomState(currentScale);
 });
 
 zoomResetButton.addEventListener('click', () => {
-    resetZoom();
+    currentScale = 1;
+    applyZoomState(currentScale);
+});
+
+// --- Synchronized Panning Logic ---
+
+const startPanning = (e, container) => {
+    // Only start panning on left mouse button (button 0)
+    if (e.button !== 0) return;
+    
+    isPanning = true;
+    originalContainer.classList.add('grabbing');
+    modifiedContainer.classList.add('grabbing');
+
+    // Store the initial mouse position and the container's scroll position
+    startX = e.pageX;
+    startY = e.pageY;
+    
+    // Store scroll positions for both containers to keep them in sync
+    scrollLeft = container.scrollLeft;
+    scrollTop = container.scrollTop;
+    
+    // Prevent default behavior to avoid text selection during panning
+    e.preventDefault();
+};
+
+const stopPanning = () => {
+    isPanning = false;
+    originalContainer.classList.remove('grabbing');
+    modifiedContainer.classList.remove('grabbing');
+};
+
+const handlePanning = (e) => {
+    if (!isPanning) return;
+    e.preventDefault();
+    
+    // Calculate the distance the mouse has moved from the initial click
+    const walkX = e.pageX - startX;
+    const walkY = e.pageY - startY;
+
+    // Apply the new scroll positions to both containers
+    // Only apply scrolling when zoomed in (currentScale > 1)
+    if (currentScale > 1) {
+        originalContainer.scrollLeft = scrollLeft - walkX;
+        modifiedContainer.scrollLeft = scrollLeft - walkX;
+        originalContainer.scrollTop = scrollTop - walkY;
+        modifiedContainer.scrollTop = scrollTop - walkY;
+    }
+};
+
+// Function to synchronize scroll positions between containers
+function syncScrollPositions() {
+    // Use the active container as the source of truth
+    const sourceContainer = isPanning ? 
+        (startX && startY ? (document.activeElement === originalContainer ? originalContainer : modifiedContainer) : originalContainer) : 
+        originalContainer;
+    
+    // Apply the scroll positions to both containers
+    const scrollLeft = sourceContainer.scrollLeft;
+    const scrollTop = sourceContainer.scrollTop;
+    
+    originalContainer.scrollLeft = scrollLeft;
+    modifiedContainer.scrollLeft = scrollLeft;
+    originalContainer.scrollTop = scrollTop;
+    modifiedContainer.scrollTop = scrollTop;
+}
+
+originalContainer.addEventListener('mousedown', (e) => startPanning(e, originalContainer));
+modifiedContainer.addEventListener('mousedown', (e) => startPanning(e, modifiedContainer));
+
+document.addEventListener('mouseup', stopPanning);
+document.addEventListener('mousemove', handlePanning);
+document.addEventListener('mouseleave', stopPanning); // Stop panning if mouse leaves the document
+
+// Add scroll event listeners to keep containers in sync
+originalContainer.addEventListener('scroll', () => {
+    if (!isPanning) { // Only sync if not currently panning (to avoid loops)
+        modifiedContainer.scrollLeft = originalContainer.scrollLeft;
+        modifiedContainer.scrollTop = originalContainer.scrollTop;
+    }
+});
+
+modifiedContainer.addEventListener('scroll', () => {
+    if (!isPanning) { // Only sync if not currently panning (to avoid loops)
+        originalContainer.scrollLeft = modifiedContainer.scrollLeft;
+        originalContainer.scrollTop = modifiedContainer.scrollTop;
+    }
 });
