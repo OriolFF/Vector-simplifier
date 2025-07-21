@@ -79,9 +79,15 @@ html, body {
     font-size: 1rem;
 }
 
-.zoom-controls {
+.zoom-controls, .zoom-controls-placeholder {
     display: flex;
     gap: 0.25rem;
+}
+
+.zoom-controls-placeholder {
+    /* Match the width of the zoom controls */
+    min-width: 120px;
+    height: 31px; /* Match the height of the buttons */
 }
 
 .image-container {
