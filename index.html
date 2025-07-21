@@ -15,9 +15,11 @@
             <input type="file" id="file-input" accept=".svg, .xml" class="d-none">
             <label for="file-input" class="btn btn-sm btn-primary">Load Vector</label>
             <button id="save-button" class="btn btn-sm btn-success">Save Modified</button>
+            <button id="toggle-stats" class="btn btn-sm btn-outline-secondary">Hide Stats</button>
             <div id="slider-container">
-                <label for="simplify-tolerance">Tolerance</label>
-                <input type="range" id="simplify-tolerance" class="form-range" min="1" max="8" step="1" value="2">
+                <label for="simplify-tolerance">Simplification Strength</label>
+                <input type="range" id="simplify-tolerance" class="form-range" min="1" max="8" step="1" value="7">
+                <span id="tolerance-value">Medium</span>
             </div>
         </div>
     </header>

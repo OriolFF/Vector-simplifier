@@ -10,7 +10,11 @@ const zoomInButton = document.getElementById('zoom-in');
 const zoomOutButton = document.getElementById('zoom-out');
 const zoomResetButton = document.getElementById('zoom-reset');
 const saveButton = document.getElementById('save-button');
+const toggleStatsButton = document.getElementById('toggle-stats');
 const statsContainer = document.getElementById('stats-container');
+
+// Stats visibility state
+let statsVisible = true;
 
 // --- State Variables ---
 let currentScale = 1;
@@ -80,8 +84,12 @@ function loadAndDisplay(svgString) {
     currentScale = 1; // Reset scale for new image
     
     // Apply the current tolerance value immediately
-    const tolerance = parseFloat(simplifyToleranceSlider.value);
-    simplifyModifiedView(tolerance);
+    const sliderValue = parseFloat(simplifyToleranceSlider.value);
+    const invertedTolerance = 9 - sliderValue; // Invert the value
+    simplifyModifiedView(invertedTolerance);
+    
+    // Update the tolerance display
+    updateToleranceDisplay(sliderValue);
     
     updateStatsView();
 }
@@ -377,10 +385,41 @@ fileInput.addEventListener('change', (event) => {
 
 
 
+// Function to update the tolerance value display
+function updateToleranceDisplay(value) {
+    const toleranceValue = document.getElementById('tolerance-value');
+    // Map slider values to descriptive text
+    const labels = {
+        1: 'None',
+        2: 'Very Low',
+        3: 'Low',
+        4: 'Light',
+        5: 'Medium',
+        6: 'Strong',
+        7: 'High',
+        8: 'Maximum'
+    };
+    toleranceValue.textContent = labels[value];
+}
+
+// Initialize tolerance display
+updateToleranceDisplay(simplifyToleranceSlider.value);
+
 simplifyToleranceSlider.addEventListener('input', () => {
     if (!originalSvgContent) return; // Don't simplify if nothing is loaded
-    const tolerance = parseFloat(simplifyToleranceSlider.value);
-    simplifyModifiedView(tolerance);
+    
+    // Get the slider value
+    const sliderValue = parseFloat(simplifyToleranceSlider.value);
+    
+    // Invert the tolerance value: higher slider value = more simplification
+    // Map slider values 1-8 to tolerance values 8-1
+    const invertedTolerance = 9 - sliderValue;
+    
+    // Update the display
+    updateToleranceDisplay(sliderValue);
+    
+    // Apply the simplification
+    simplifyModifiedView(invertedTolerance);
 });
 
 saveButton.addEventListener('click', () => {
@@ -509,5 +548,17 @@ modifiedContainer.addEventListener('scroll', () => {
     if (!isPanning) { // Only sync if not currently panning (to avoid loops)
         originalContainer.scrollLeft = modifiedContainer.scrollLeft;
         originalContainer.scrollTop = modifiedContainer.scrollTop;
+    }
+});
+
+// Toggle stats visibility
+toggleStatsButton.addEventListener('click', () => {
+    statsVisible = !statsVisible;
+    if (statsVisible) {
+        statsContainer.classList.remove('hidden');
+        toggleStatsButton.textContent = 'Hide Stats';
+    } else {
+        statsContainer.classList.add('hidden');
+        toggleStatsButton.textContent = 'Show Stats';
     }
 });
