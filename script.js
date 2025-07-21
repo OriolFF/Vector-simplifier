@@ -12,6 +12,15 @@ const zoomResetButton = document.getElementById('zoom-reset');
 const saveButton = document.getElementById('save-button');
 const toggleStatsButton = document.getElementById('toggle-stats');
 const statsContainer = document.getElementById('stats-container');
+const bgColorPicker = document.getElementById('bg-color');
+
+// Save dialog elements
+const customSaveModal = document.getElementById('customSaveModal');
+const fileNameInput = document.getElementById('fileName');
+const replaceOriginalCheckbox = document.getElementById('replaceOriginal');
+const confirmSaveButton = document.getElementById('confirmSave');
+const closeModalBtn = document.getElementById('closeModalBtn');
+const cancelSaveBtn = document.getElementById('cancelSaveBtn');
 
 // Stats visibility state
 let statsVisible = true;
@@ -25,6 +34,7 @@ let originalFileName = '';
 let originalViewBox = null; // [x, y, width, height]
 let initialWidth = null;
 let initialHeight = null;
+let backgroundColor = '#ffffff'; // Default background color
 
 // --- Panning State ---
 let isPanning = false;
@@ -35,45 +45,58 @@ let scrollTop;
 
 // --- Core Functions ---
 
+function applyBackgroundColor(color) {
+    // Apply background color to both containers
+    originalContainer.style.backgroundColor = color;
+    modifiedContainer.style.backgroundColor = color;
+    backgroundColor = color;
+}
+
 function displaySvg(svgString, container, preserveZoom = false) {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
     const svgElement = svgDoc.querySelector('svg');
 
-    if (svgElement) {
-        // Remove width/height to allow responsive sizing
-        svgElement.removeAttribute('width');
-        svgElement.removeAttribute('height');
-        
-        // Check if we need to preserve zoom (for tolerance slider adjustments)
-        if (preserveZoom && container.querySelector('.svg-wrapper')) {
-            // Just update the SVG content inside the existing wrapper
-            const wrapper = container.querySelector('.svg-wrapper');
-            const oldSvg = wrapper.querySelector('svg');
-            if (oldSvg) {
-                wrapper.replaceChild(svgElement, oldSvg);
-            } else {
-                wrapper.appendChild(svgElement);
-            }
-        } else {
-            // Clear container and add the SVG
-            container.innerHTML = '';
-            container.appendChild(svgElement);
-
-            // If this is the original container, store the viewBox and reset zoom state
-            if (container === originalContainer) {
-                const viewBox = svgElement.getAttribute('viewBox');
-                originalViewBox = viewBox ? viewBox.split(' ').map(Number) : null;
-                
-                // Reset dimensions for the new image
-                initialWidth = null;
-                initialHeight = null;
-                currentScale = 1; // Reset scale for new image
-            }
-        }
-    } else {
-        container.innerHTML = '<p>Could not render SVG.</p>';
+    if (!svgElement) {
+        container.innerHTML = `<div class="error">Invalid SVG content</div>`;
+        return;
     }
+
+    // Store original viewBox if not already stored
+    if (!originalViewBox && container === originalContainer) {
+        const viewBox = svgElement.getAttribute('viewBox');
+        if (viewBox) {
+            originalViewBox = viewBox.split(' ').map(Number);
+        }
+    }
+
+    // Remove width and height attributes for responsive scaling
+    svgElement.removeAttribute('width');
+    svgElement.removeAttribute('height');
+
+    // Set max-width and max-height to 100% for responsive scaling
+    svgElement.style.maxWidth = '100%';
+    svgElement.style.maxHeight = '100%';
+
+    // Create a wrapper div for the SVG to apply zoom
+    const wrapper = document.createElement('div');
+    wrapper.className = 'svg-wrapper';
+    wrapper.style.transformOrigin = 'top left';
+
+    // If we're preserving zoom, update the SVG in the existing wrapper
+    if (preserveZoom && container.querySelector('.svg-wrapper')) {
+        const wrapper = container.querySelector('.svg-wrapper');
+        const oldSvg = wrapper.querySelector('svg');
+        wrapper.replaceChild(svgElement, oldSvg);
+    } else {
+        // Otherwise, create a new wrapper and add the SVG to it
+        container.innerHTML = '';
+        wrapper.appendChild(svgElement);
+        container.appendChild(wrapper);
+    }
+    
+    // Apply the current background color
+    container.style.backgroundColor = backgroundColor;
 }
 
 function loadAndDisplay(svgString) {
@@ -422,16 +445,61 @@ simplifyToleranceSlider.addEventListener('input', () => {
     simplifyModifiedView(invertedTolerance);
 });
 
+// Function to show the custom modal
+function showCustomModal() {
+    customSaveModal.classList.add('show');
+}
+
+// Function to hide the custom modal
+function hideCustomModal() {
+    customSaveModal.classList.remove('show');
+}
+
 saveButton.addEventListener('click', () => {
     if (!modifiedSvgContent) {
         alert('There is no modified image to save. Please simplify an image first.');
         return;
     }
 
+    // Set default file name in the modal
     const baseName = originalFileName.substring(0, originalFileName.lastIndexOf('.'));
     const extension = originalFileType === 'xml' ? '.xml' : '.svg';
-    const newFileName = `${baseName}_simplified${extension}`;
+    fileNameInput.value = `${baseName}_simplified${extension}`;
+    
+    // Reset replace original checkbox
+    replaceOriginalCheckbox.checked = false;
+    
+    // Show the custom save dialog
+    showCustomModal();
+});
 
+// Close modal when clicking the close button
+closeModalBtn.addEventListener('click', hideCustomModal);
+
+// Close modal when clicking the cancel button
+cancelSaveBtn.addEventListener('click', hideCustomModal);
+
+// Close modal when clicking outside the modal content
+customSaveModal.addEventListener('click', (e) => {
+    if (e.target === customSaveModal) {
+        hideCustomModal();
+    }
+});
+
+// Handle save confirmation
+confirmSaveButton.addEventListener('click', () => {
+    // Get the file name from the input
+    const fileName = fileNameInput.value.trim();
+    if (!fileName) {
+        alert('Please enter a file name.');
+        return;
+    }
+    
+    // Add extension if not present
+    const extension = originalFileType === 'xml' ? '.xml' : '.svg';
+    const finalFileName = fileName.endsWith(extension) ? fileName : `${fileName}${extension}`;
+    
+    // Prepare content based on file type
     let fileContent;
     let mimeType;
 
@@ -448,7 +516,14 @@ saveButton.addEventListener('click', () => {
         mimeType = 'image/svg+xml';
     }
 
-    downloadFile(fileContent, newFileName, mimeType);
+    // If replace original is checked, use the original file name
+    const downloadFileName = replaceOriginalCheckbox.checked ? originalFileName : finalFileName;
+    
+    // Download the file
+    downloadFile(fileContent, downloadFileName, mimeType);
+    
+    // Close the modal
+    hideCustomModal();
 });
 
 zoomInButton.addEventListener('click', () => {
@@ -562,3 +637,12 @@ toggleStatsButton.addEventListener('click', () => {
         toggleStatsButton.textContent = 'Show Stats';
     }
 });
+
+// Background color picker event listener
+bgColorPicker.addEventListener('input', (e) => {
+    const color = e.target.value;
+    applyBackgroundColor(color);
+});
+
+// Initialize background color
+applyBackgroundColor(bgColorPicker.value);
