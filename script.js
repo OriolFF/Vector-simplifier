@@ -1,8 +1,25 @@
+import { optimize } from 'https://cdn.jsdelivr.net/npm/svgo@3.0.2/dist/svgo.browser.js';
+
+// --- DOM Elements ---
 const fileInput = document.getElementById('file-input');
 const originalContainer = document.getElementById('original-container');
 const modifiedContainer = document.getElementById('modified-container');
-let originalSvgContent = '';
+const simplifyPathButton = document.getElementById('simplify-path');
+const simplifyToleranceSlider = document.getElementById('simplify-tolerance');
+const zoomInButton = document.getElementById('zoom-in');
+const zoomOutButton = document.getElementById('zoom-out');
+const zoomResetButton = document.getElementById('zoom-reset');
+const saveButton = document.getElementById('save-button');
+const statsContainer = document.getElementById('stats-container');
+
+// --- State Variables ---
 let currentScale = 1;
+let originalSvgContent = null;
+let modifiedSvgContent = null;
+let originalFileType = ''; // 'svg' or 'xml'
+let originalFileName = '';
+
+// --- Core Functions ---
 
 function displaySvg(svgString, container) {
     const parser = new DOMParser();
@@ -13,12 +30,12 @@ function displaySvg(svgString, container) {
         svgElement.removeAttribute('width');
         svgElement.removeAttribute('height');
         
-        // Clear previous content, but keep the h2
         const h2 = container.querySelector('h2');
         container.innerHTML = '';
         if (h2) container.appendChild(h2);
 
         container.appendChild(svgElement);
+        updateZoom();
     } else {
         const h2 = container.querySelector('h2');
         container.innerHTML = '';
@@ -29,33 +46,12 @@ function displaySvg(svgString, container) {
 
 function loadAndDisplay(svgString) {
     originalSvgContent = svgString;
+    modifiedSvgContent = svgString; // Initially, modified is same as original
     displaySvg(originalSvgContent, originalContainer);
-    displaySvg(originalSvgContent, modifiedContainer);
+    displaySvg(modifiedSvgContent, modifiedContainer);
     resetZoom();
+    updateStatsView();
 }
-
-fileInput.addEventListener('change', (event) => {
-    const file = event.target.files[0];
-    if (!file) {
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const content = e.target.result;
-        // For now, we'll just directly inject the SVG content.
-        // We will add more sophisticated parsing for Android XML later.
-        if (file.type === 'image/svg+xml' || file.name.endsWith('.svg')) {
-            loadAndDisplay(content);
-        } else if (file.name.endsWith('.xml')) {
-            handleAndroidVector(content);
-        } else {
-            originalContainer.innerHTML = '<h2>Original</h2><p>Unsupported file type.</p>';
-            modifiedContainer.innerHTML = '<h2>Modified</h2><p>Unsupported file type.</p>';
-        }
-    };
-    reader.readAsText(file);
-});
 
 function handleAndroidVector(xmlString) {
     try {
@@ -67,8 +63,6 @@ function handleAndroidVector(xmlString) {
             throw new Error('Invalid Android Vector Drawable XML: <vector> tag not found.');
         }
 
-        const width = vectorNode.getAttribute('android:width').replace('dp', '');
-        const height = vectorNode.getAttribute('android:height').replace('dp', '');
         const viewportWidth = vectorNode.getAttribute('android:viewportWidth');
         const viewportHeight = vectorNode.getAttribute('android:viewportHeight');
 
@@ -89,7 +83,6 @@ function handleAndroidVector(xmlString) {
                     path += '/>';
                     result += path;
                 } else if (child.nodeName === 'group') {
-                    // Basic group handling, can be extended for transformations
                     result += '<g>';
                     result += processNode(child);
                     result += '</g>';
@@ -118,35 +111,82 @@ function escapeHtml(unsafe) {
          .replace(/'/g, "&#039;");
  }
 
-const simplifyPathButton = document.getElementById('simplify-path');
-const zoomInButton = document.getElementById('zoom-in');
-const zoomOutButton = document.getElementById('zoom-out');
-const zoomResetButton = document.getElementById('zoom-reset');
-
-simplifyPathButton.addEventListener('click', () => {
+function simplifyModifiedView(tolerance) {
     if (!originalSvgContent) {
-        alert('Please load an SVG or Vector Drawable first.');
         return;
     }
 
-    const canvas = document.createElement('canvas');
-    paper.setup(canvas);
+    try {
+        const result = optimize(originalSvgContent, {
+            // path to the file will be passed to plugins
+            path: originalFileName,
+            plugins: [
+                {
+                    name: 'preset-default',
+                    params: {
+                        overrides: {
+                            convertPathData: {
+                                floatPrecision: tolerance,
+                            },
+                            removeViewBox: false,
+                            // The correct way to enable/disable plugins in the preset
+                            removeDimensions: true,
+                            cleanupIDs: false,
+                        },
+                    },
+                },
+            ],
+        });
 
-    paper.project.importSVG(originalSvgContent, {
-        onLoad: (item) => {
-            const paths = item.getItems({ class: paper.Path, recursive: true });
-            paths.forEach(path => {
-                path.simplify(2.5);
-            });
+        modifiedSvgContent = result.data;
+        displaySvg(modifiedSvgContent, modifiedContainer);
+        updateStatsView();
+    } catch (error) {
+        console.error('Error during SVGO simplification:', error);
+    }
+}
 
-            const simplifiedSvgString = paper.project.exportSVG({ asString: true });
-            displaySvg(simplifiedSvgString, modifiedContainer);
+function svgToAndroidXml(svgString) {
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
+    const svgNode = svgDoc.querySelector('svg');
 
-            paper.project.clear();
-        },
-        expandShapes: true
+    if (!svgNode) {
+        throw new Error('Invalid SVG for XML conversion.');
+    }
+
+    const viewBox = svgNode.getAttribute('viewBox').split(' ');
+    const width = viewBox[2];
+    const height = viewBox[3];
+
+    let xml = `<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="${width}dp"
+    android:height="${height}dp"
+    android:viewportWidth="${width}"
+    android:viewportHeight="${height}">\n`;
+
+    const paths = svgNode.querySelectorAll('path');
+    paths.forEach(path => {
+        const d = path.getAttribute('d');
+        const fill = path.getAttribute('fill') || '#000000';
+        xml += `    <path
+        android:fillColor="${fill}"
+        android:pathData="${d}"/>\n`;
     });
-});
+
+    xml += '</vector>';
+    return xml;
+}
+
+function downloadFile(content, fileName, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
 
 function updateZoom() {
     const svgElements = document.querySelectorAll('.image-container svg');
@@ -159,6 +199,135 @@ function resetZoom() {
     currentScale = 1;
     updateZoom();
 }
+
+function calculateSvgStats(svgString) {
+    if (!svgString) {
+        return { pathCount: 0, pathLength: 0 };
+    }
+
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
+    const paths = svgDoc.querySelectorAll('path');
+
+    const pathLength = Array.from(paths).reduce((total, path) => {
+        const d = path.getAttribute('d');
+        return total + (d ? d.length : 0);
+    }, 0);
+
+    return {
+        pathCount: paths.length,
+        pathLength: pathLength
+    };
+}
+
+function updateStatsView() {
+    if (!originalSvgContent || !modifiedSvgContent) {
+        statsContainer.innerHTML = '';
+        return;
+    }
+
+    const originalStats = calculateSvgStats(originalSvgContent);
+    const modifiedStats = calculateSvgStats(modifiedSvgContent);
+
+    const pathCountChange = originalStats.pathCount > 0 
+        ? ((modifiedStats.pathCount - originalStats.pathCount) / originalStats.pathCount) * 100
+        : 0;
+
+    const pathLengthChange = originalStats.pathLength > 0
+        ? ((modifiedStats.pathLength - originalStats.pathLength) / originalStats.pathLength) * 100
+        : 0;
+
+    statsContainer.innerHTML = `
+        <table>
+            <tr>
+                <th>Metric</th>
+                <th>Original</th>
+                <th>Modified</th>
+                <th>Change</th>
+            </tr>
+            <tr>
+                <td>Path Count</td>
+                <td>${originalStats.pathCount}</td>
+                <td>${modifiedStats.pathCount}</td>
+                <td>${pathCountChange.toFixed(2)}%</td>
+            </tr>
+            <tr>
+                <td>Path Data Length</td>
+                <td>${originalStats.pathLength}</td>
+                <td>${modifiedStats.pathLength}</td>
+                <td>${pathLengthChange.toFixed(2)}%</td>
+            </tr>
+        </table>
+    `;
+}
+
+// --- Event Listeners ---
+
+fileInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) {
+        return;
+    }
+
+    originalFileName = file.name;
+    originalFileType = file.name.endsWith('.xml') ? 'xml' : 'svg';
+    statsContainer.innerHTML = ''; // Clear stats on new file
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const content = e.target.result;
+        if (originalFileType === 'xml') {
+            handleAndroidVector(content);
+        } else {
+            loadAndDisplay(content);
+        }
+    };
+    reader.readAsText(file);
+});
+
+simplifyPathButton.addEventListener('click', () => {
+    if (!originalSvgContent) {
+        alert('Please load an SVG or Vector Drawable first.');
+        return;
+    }
+    const tolerance = parseFloat(simplifyToleranceSlider.value);
+    simplifyModifiedView(tolerance);
+});
+
+simplifyToleranceSlider.addEventListener('input', () => {
+    if (!originalSvgContent) return; // Don't simplify if nothing is loaded
+    const tolerance = parseFloat(simplifyToleranceSlider.value);
+    simplifyModifiedView(tolerance);
+});
+
+saveButton.addEventListener('click', () => {
+    if (!modifiedSvgContent) {
+        alert('There is no modified image to save. Please simplify an image first.');
+        return;
+    }
+
+    const baseName = originalFileName.substring(0, originalFileName.lastIndexOf('.'));
+    const extension = originalFileType === 'xml' ? '.xml' : '.svg';
+    const newFileName = `${baseName}_simplified${extension}`;
+
+    let fileContent;
+    let mimeType;
+
+    if (originalFileType === 'xml') {
+        try {
+            fileContent = svgToAndroidXml(modifiedSvgContent);
+            mimeType = 'application/xml';
+        } catch (error) {
+            alert(`Could not convert back to XML: ${error.message}`);
+            return;
+        }
+    } else {
+        fileContent = modifiedSvgContent;
+        mimeType = 'image/svg+xml';
+    }
+
+    downloadFile(fileContent, newFileName, mimeType);
+});
 
 zoomInButton.addEventListener('click', () => {
     currentScale *= 1.2;

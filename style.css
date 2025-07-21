@@ -7,6 +7,13 @@ body {
 
 #controls, #tool-menu {
     margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+}
+
+#tool-menu label {
+    margin-left: 10px;
+    margin-right: 5px;
 }
 
 #preview-area {
@@ -41,4 +48,27 @@ body {
 
 #zoom-controls {
     margin-bottom: 20px;
+}
+
+#stats-container {
+    width: 90%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    margin-bottom: 20px;
+    box-sizing: border-box;
+}
+
+#stats-container table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#stats-container th, #stats-container td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+}
+
+#stats-container th {
+    background-color: #f2f2f2;
 }

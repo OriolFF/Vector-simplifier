@@ -13,12 +13,16 @@
     </div>
     <div id="tool-menu">
         <button id="simplify-path">Simplify Path</button>
+        <button id="save-button">Save Modified</button>
+        <label for="simplify-tolerance">Tolerance:</label>
+        <input type="range" id="simplify-tolerance" min="1" max="8" step="1" value="2">
     </div>
     <div id="zoom-controls">
         <button id="zoom-in">Zoom In</button>
         <button id="zoom-out">Zoom Out</button>
         <button id="zoom-reset">Reset Zoom</button>
     </div>
+    <div id="stats-container"></div>
     <div id="preview-area">
         <div id="original-container" class="image-container">
             <h2>Original</h2>
@@ -28,7 +32,6 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.15/paper-full.min.js"></script>
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
 </body>
 </html>
