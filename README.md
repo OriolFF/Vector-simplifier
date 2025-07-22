@@ -1,5 +1,7 @@
 # Vector Editor
 
+This tool is also available online at [https://oriolff.github.io/Vector-simplifier/](https://oriolff.github.io/Vector-simplifier/)
+
 This tool is designed to simplify SVG and Android Vector Drawable files, primarily to reduce path data complexity and avoid lint warnings associated with long path strings in Android development.
 
 ## Project Goal
