@@ -116,13 +116,71 @@ export function showResizeTool() {
     // Add event listener for the export button
     const exportButton = document.getElementById('resize-confirm-btn');
     exportButton.addEventListener('click', () => {
-        // For now, just log the selected options
         const width = parseInt(widthInput.value, 10);
         const height = parseInt(heightInput.value, 10);
         const format = document.querySelector('input[name="export-format"]:checked').value;
         
-        console.log(`Exporting image at ${width}×${height} in ${format.toUpperCase()} format`);
-        // We'll implement the actual export functionality later
+        // Get the SVG content
+        const svgElement = document.querySelector('#modified-container svg');
+        if (!svgElement) {
+            alert('Error: Could not find SVG element');
+            return;
+        }
+        
+        // Create a clone of the SVG to modify
+        const svgClone = svgElement.cloneNode(true);
+        
+        // Get the original dimensions from viewBox
+        const viewBox = svgElement.getAttribute('viewBox');
+        if (!viewBox) {
+            alert('Error: SVG does not have a viewBox attribute');
+            return;
+        }
+        
+        const [minX, minY, origWidth, origHeight] = viewBox.split(' ').map(Number);
+        
+        // Update the SVG attributes for the new size
+        svgClone.setAttribute('width', width);
+        svgClone.setAttribute('height', height);
+        
+        // Keep the viewBox the same to maintain the content's aspect ratio
+        // The browser will handle the scaling
+        
+        // Convert the SVG element to a string
+        const serializer = new XMLSerializer();
+        let svgString = serializer.serializeToString(svgClone);
+        
+        // Ensure the SVG has the correct XML declaration and namespace
+        if (!svgString.includes('xmlns="http://www.w3.org/2000/svg"')) {
+            svgString = svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+        }
+        
+        svgString = '<?xml version="1.0" encoding="UTF-8"?>' + svgString;
+        
+        // Create a blob from the SVG string
+        const blob = new Blob([svgString], { type: 'image/svg+xml' });
+        
+        // Create a download link
+        const url = URL.createObjectURL(blob);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = url;
+        
+        // Get the original filename if available
+        let filename = 'resized';
+        if (window.originalFileName) {
+            // Remove file extension
+            filename = window.originalFileName.split('.').slice(0, -1).join('.');
+        }
+        
+        downloadLink.download = `${filename}_${width}x${height}.svg`;
+        
+        // Trigger the download
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        
+        // Clean up
+        URL.revokeObjectURL(url);
         
         // Close the modal
         modal.classList.remove('show');
