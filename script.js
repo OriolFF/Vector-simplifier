@@ -1,4 +1,5 @@
 import { optimize } from 'https://cdn.jsdelivr.net/npm/svgo@3.0.2/dist/svgo.browser.js';
+import { initializeTools } from './tools.js';
 
 // --- DOM Elements ---
 const fileInput = document.getElementById('file-input');
@@ -599,6 +600,9 @@ bgColorPicker.addEventListener('input', (e) => {
     const color = e.target.value;
     applyBackgroundColor(color);
 });
+
+// Initialize Tools
+initializeTools();
 
 // Initialize background color
 applyBackgroundColor(bgColorPicker.value);
