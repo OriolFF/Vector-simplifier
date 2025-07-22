@@ -47,4 +47,4 @@ This project relies on the following external libraries:
 
 ## Screenshots
 
-![screenshoot](readme-images/screenshot.png)
+![screenshot](readme-images/screenshot.png)
