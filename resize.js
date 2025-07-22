@@ -1,23 +1,135 @@
 export function showResizeTool() {
+    // Check if there's an SVG loaded
+    if (!document.querySelector('#modified-container svg')) {
+        alert('Please load and modify an SVG image first.');
+        return;
+    }
+
     // Create a custom modal for the resize tool
     const modal = document.createElement('div');
     modal.className = 'custom-modal show';
     modal.innerHTML = `
         <div class="custom-modal-content">
             <div class="custom-modal-header">
-                <h5 class="custom-modal-title">Resize Tool</h5>
+                <h5 class="custom-modal-title">Resize Image</h5>
                 <button type="button" class="custom-close-btn">&times;</button>
             </div>
             <div class="custom-modal-body">
-                <p>Resize tool is selected!</p>
+                <form id="resize-form">
+                    <div class="mb-3">
+                        <label for="resize-size" class="form-label">Select Size (px):</label>
+                        <div class="d-flex gap-2 mb-2">
+                            <button type="button" class="btn btn-outline-primary size-preset" data-size="24">24×24</button>
+                            <button type="button" class="btn btn-outline-primary size-preset" data-size="48">48×48</button>
+                            <button type="button" class="btn btn-outline-primary size-preset" data-size="512">512×512</button>
+                        </div>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="resize-width" placeholder="Width" min="1" required>
+                            <span class="input-group-text">×</span>
+                            <input type="number" class="form-control" id="resize-height" placeholder="Height" min="1" required>
+                            <span class="input-group-text">px</span>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="maintain-aspect-ratio" checked>
+                            <label class="form-check-label" for="maintain-aspect-ratio">
+                                Maintain aspect ratio
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Export Format:</label>
+                        <div class="d-flex gap-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="export-format" id="format-png" value="png" checked>
+                                <label class="form-check-label" for="format-png">PNG</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="export-format" id="format-webp" value="webp">
+                                <label class="form-check-label" for="format-webp">WebP</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
             </div>
             <div class="custom-modal-footer">
-                <button type="button" class="btn btn-secondary close-modal-btn">Close</button>
+                <button type="button" class="btn btn-secondary close-modal-btn">Cancel</button>
+                <button type="button" class="btn btn-primary" id="resize-confirm-btn">Export</button>
             </div>
         </div>
     `;
     
     document.body.appendChild(modal);
+    
+    // Get the original SVG dimensions to set as default
+    const svgElement = document.querySelector('#modified-container svg');
+    if (svgElement) {
+        const viewBox = svgElement.getAttribute('viewBox');
+        if (viewBox) {
+            const [, , width, height] = viewBox.split(' ').map(Number);
+            document.getElementById('resize-width').value = width;
+            document.getElementById('resize-height').value = height;
+        }
+    }
+    
+    // Add event listeners for size presets
+    const sizePresets = modal.querySelectorAll('.size-preset');
+    sizePresets.forEach(button => {
+        button.addEventListener('click', () => {
+            const size = parseInt(button.dataset.size, 10);
+            const widthInput = document.getElementById('resize-width');
+            const heightInput = document.getElementById('resize-height');
+            
+            // Set both width and height to the preset size
+            widthInput.value = size;
+            heightInput.value = size;
+        });
+    });
+    
+    // Add event listener for aspect ratio maintenance
+    const widthInput = document.getElementById('resize-width');
+    const heightInput = document.getElementById('resize-height');
+    const aspectRatioCheckbox = document.getElementById('maintain-aspect-ratio');
+    
+    let aspectRatio = 1;
+    if (svgElement) {
+        const viewBox = svgElement.getAttribute('viewBox');
+        if (viewBox) {
+            const [, , width, height] = viewBox.split(' ').map(Number);
+            aspectRatio = width / height;
+        }
+    }
+    
+    widthInput.addEventListener('input', () => {
+        if (aspectRatioCheckbox.checked) {
+            const newWidth = parseFloat(widthInput.value) || 0;
+            heightInput.value = Math.round(newWidth / aspectRatio);
+        }
+    });
+    
+    heightInput.addEventListener('input', () => {
+        if (aspectRatioCheckbox.checked) {
+            const newHeight = parseFloat(heightInput.value) || 0;
+            widthInput.value = Math.round(newHeight * aspectRatio);
+        }
+    });
+    
+    // Add event listener for the export button
+    const exportButton = document.getElementById('resize-confirm-btn');
+    exportButton.addEventListener('click', () => {
+        // For now, just log the selected options
+        const width = parseInt(widthInput.value, 10);
+        const height = parseInt(heightInput.value, 10);
+        const format = document.querySelector('input[name="export-format"]:checked').value;
+        
+        console.log(`Exporting image at ${width}×${height} in ${format.toUpperCase()} format`);
+        // We'll implement the actual export functionality later
+        
+        // Close the modal
+        modal.classList.remove('show');
+        setTimeout(() => {
+            document.body.removeChild(modal);
+        }, 300);
+    });
     
     // Add event listeners to close the modal
     const closeButtons = modal.querySelectorAll('.custom-close-btn, .close-modal-btn');
