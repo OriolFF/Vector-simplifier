@@ -1,3 +1,6 @@
+/**
+ * Shows the resize tool dialog and handles the resize functionality
+ */
 export function showResizeTool() {
     // Check if there's an SVG loaded
     if (!document.querySelector('#modified-container svg')) {
@@ -146,6 +149,31 @@ export function showResizeTool() {
         // Keep the viewBox the same to maintain the content's aspect ratio
         // The browser will handle the scaling
         
+        // Get the original filename and file type from the SVG element's data attributes
+        let filename = 'resized.svg';
+        let fileType = 'svg';
+        
+        // Get the SVG element
+        const currentSvgElement = document.querySelector('#modified-container svg');
+        if (currentSvgElement) {
+            const storedFilename = currentSvgElement.getAttribute('data-original-filename');
+            const storedFileType = currentSvgElement.getAttribute('data-file-type');
+            
+            if (storedFilename) {
+                filename = storedFilename;
+                console.log('Using filename from SVG data attribute:', storedFilename);
+            } else {
+                console.log('No filename stored in SVG data attribute');
+            }
+            
+            if (storedFileType) {
+                fileType = storedFileType; // 'svg' or 'xml'
+                console.log('Using file type from SVG data attribute:', storedFileType);
+            }
+        } else {
+            console.log('SVG element not found');
+        }
+
         // Convert the SVG element to a string
         const serializer = new XMLSerializer();
         let svgString = serializer.serializeToString(svgClone);
@@ -157,22 +185,44 @@ export function showResizeTool() {
         
         svgString = '<?xml version="1.0" encoding="UTF-8"?>' + svgString;
         
-        // Create a blob from the SVG string
-        const blob = new Blob([svgString], { type: 'image/svg+xml' });
+        // Use the file type we determined earlier to set the correct MIME type
+        const mimeType = fileType === 'xml' ? 'application/xml' : 'image/svg+xml';
+        
+        // Create a Blob with the appropriate MIME type
+        const blob = new Blob([svgString], { type: mimeType });
+        const url = URL.createObjectURL(blob);
         
         // Create a download link
-        const url = URL.createObjectURL(blob);
         const downloadLink = document.createElement('a');
         downloadLink.href = url;
         
-        // Get the original filename if available
-        let filename = 'resized';
-        if (window.originalFileName) {
-            // Remove file extension
-            filename = window.originalFileName.split('.').slice(0, -1).join('.');
+        // Make sure we have valid values to work with
+        if (!filename) {
+            filename = fileType === 'xml' ? 'image.xml' : 'image.svg';
         }
         
-        downloadLink.download = `${filename}_${width}x${height}.svg`;
+        // We already know if it's an XML file from the fileType variable
+        
+        console.log('Processing filename for download:', filename);
+        
+        // Split the filename to insert the size suffix before the extension
+        const lastDotIndex = filename.lastIndexOf('.');
+        let nameWithoutExt = filename;
+        let extension = '';
+        
+        if (lastDotIndex !== -1) {
+            nameWithoutExt = filename.substring(0, lastDotIndex);
+            extension = filename.substring(lastDotIndex); // Includes the dot
+        }
+        
+        // Use only the width for the suffix if width and height are the same
+        const sizeSuffix = width === height ? `_${width}` : `_${width}x${height}`;
+        
+        // Combine everything back together
+        const downloadFilename = `${nameWithoutExt}${sizeSuffix}${extension}`;
+        console.log('Final download filename:', downloadFilename);
+        
+        downloadLink.download = downloadFilename;
         
         // Trigger the download
         document.body.appendChild(downloadLink);

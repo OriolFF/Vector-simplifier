@@ -10,6 +10,11 @@ export function initializeTools() {
 
     // Simple click handler for the resize button
     resizeToolBtn.addEventListener('click', () => {
-        showResizeTool();
+        console.log('Resize button clicked');
+        try {
+            showResizeTool();
+        } catch (error) {
+            console.error('Error showing resize tool:', error);
+        }
     });
 }

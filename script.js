@@ -32,6 +32,8 @@ let modifiedSvgContent = null;
 let originalFileType = ''; // 'svg' or 'xml'
 let originalFileName = '';
 let originalViewBox = null; // [x, y, width, height]
+
+// No global state needed anymore, we're using direct parameter passing
 let backgroundColor = '#ffffff'; // Default background color
 
 // --- Viewport State ---
@@ -65,6 +67,13 @@ function displaySvg(svgString, container, state) {
         if (viewBox) {
             originalViewBox = viewBox.split(' ').map(Number);
         }
+    }
+    
+    // Store the original filename and file type as data attributes on the SVG element
+    if (originalFileName && container === modifiedContainer) {
+        svgElement.setAttribute('data-original-filename', originalFileName);
+        svgElement.setAttribute('data-file-type', originalFileType);
+        console.log('Set data attributes - filename:', originalFileName, 'type:', originalFileType);
     }
 
     // Remove width/height for responsive scaling
@@ -423,6 +432,20 @@ fileInput.addEventListener('change', (event) => {
     }
 
     originalFileName = file.name;
+    console.log('File loaded, originalFileName set to:', originalFileName);
+    // Display filename in the UI for debugging
+    const debugElement = document.createElement('div');
+    debugElement.id = 'filename-debug';
+    debugElement.style.position = 'fixed';
+    debugElement.style.bottom = '10px';
+    debugElement.style.left = '10px';
+    debugElement.style.background = 'rgba(0,0,0,0.7)';
+    debugElement.style.color = 'white';
+    debugElement.style.padding = '5px';
+    debugElement.style.zIndex = '9999';
+    debugElement.textContent = `Current file: ${originalFileName}`;
+    document.body.appendChild(debugElement);
+    
     originalFileType = file.name.endsWith('.xml') ? 'xml' : 'svg';
     statsContainer.innerHTML = ''; // Clear stats on new file
 
