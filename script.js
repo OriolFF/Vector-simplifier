@@ -28,6 +28,7 @@ let statsVisible = true;
 
 // --- State Variables ---
 let originalSvgContent = null;
+let trueOriginalContent = null; // Will hold the raw, unconverted file content
 let modifiedSvgContent = null;
 let originalFileType = ''; // 'svg' or 'xml'
 let originalFileName = '';
@@ -452,6 +453,7 @@ fileInput.addEventListener('change', (event) => {
     const reader = new FileReader();
     reader.onload = (e) => {
         const content = e.target.result;
+        trueOriginalContent = content; // Store the raw content
         if (originalFileType === 'xml') {
             handleAndroidVector(content);
         } else {
@@ -625,7 +627,10 @@ bgColorPicker.addEventListener('input', (e) => {
 });
 
 // Initialize Tools
-initializeTools();
+initializeTools(() => ({
+    originalContent: trueOriginalContent, // Pass the raw, original content
+    originalFileType: originalFileType
+}));
 
 // Initialize background color
 applyBackgroundColor(bgColorPicker.value);

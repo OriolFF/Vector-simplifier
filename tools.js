@@ -1,6 +1,6 @@
 import { showResizeTool } from './resize.js';
 
-export function initializeTools() {
+export function initializeTools(getData) {
     const resizeToolBtn = document.getElementById('resize-tool-btn');
 
     if (!resizeToolBtn) {
@@ -12,7 +12,8 @@ export function initializeTools() {
     resizeToolBtn.addEventListener('click', () => {
         console.log('Resize button clicked');
         try {
-            showResizeTool();
+            const { originalContent, originalFileType } = getData();
+            showResizeTool(originalContent, originalFileType);
         } catch (error) {
             console.error('Error showing resize tool:', error);
         }
